@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manuel Belgrano, humano digital educativo</title>
+<meta name="description" content="Conversá por voz con un humano digital educativo de Manuel Belgrano que gesticula mientras te cuenta la historia de la bandera, la Revolución de Mayo y las campañas por la independencia.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🇦🇷</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Young+Serif&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --celeste: #75AADB;
+    --celeste-deep: #2F6FA8;
+    --celeste-pale: #EAF3FA;
+    --white: #FFFFFF;
+    --ink: #14233A;
+    --ink-soft: #46566D;
+    --sol: #F6B40E;
+    --line: #CFE0F0;
+    --serif: "Young Serif", Georgia, "Times New Roman", serif;
+    --sans: "Atkinson Hyperlegible", "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--celeste-pale);
+  }
+  a { color: var(--celeste-deep); text-underline-offset: 3px; }
+  button { font: inherit; }
+  :focus-visible { outline: 3px solid var(--sol); outline-offset: 3px; }
+
+  .app {
+    min-height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  }
+
+  /* Escenario: la bandera como fondo y Belgrano al frente */
+  .stage {
+    position: relative;
+    min-height: 100vh;
+    background: linear-gradient(to bottom,
+      var(--celeste) 0 33.33%,
+      var(--white) 33.33% 66.66%,
+      var(--celeste) 66.66% 100%);
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .stage svg.figure {
+    width: min(100%, 78vh);
+    height: auto;
+    max-height: 96vh;
+    display: block;
+  }
+  .caption {
+    position: absolute;
+    left: 1rem; right: 1rem; bottom: 1rem;
+    background: rgba(20, 35, 58, .92);
+    color: var(--white);
+    border-radius: 14px;
+    padding: .8rem 1.1rem;
+    font-size: 1.05rem;
+    min-height: 3.2rem;
+    display: flex; align-items: center;
+  }
+  .caption[data-empty="true"] { color: #B9C7DA; }
+
+  /* Panel de control */
+  .panel {
+    padding: clamp(1.5rem, 4vw, 3rem);
+    display: flex; flex-direction: column; gap: 1.5rem;
+    background: var(--celeste-pale);
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(2rem, 4.5vw, 3rem);
+    line-height: 1.08;
+    margin: 0;
+  }
+  .lead { margin: .6rem 0 0; color: var(--ink-soft); max-width: 34rem; }
+  h2 { font-family: var(--serif); font-weight: 400; font-size: 1.25rem; margin: 0 0 .6rem; }
+
+  .status {
+    display: flex; align-items: center; gap: .6rem;
+    font-weight: 700;
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #9AA8BA; flex: none; }
+  .dot[data-state="connecting"] { background: var(--sol); }
+  .dot[data-state="listening"] { background: #2E9E5B; }
+  .dot[data-state="speaking"] { background: var(--celeste-deep); }
+
+  .row { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .btn {
+    border: 0; cursor: pointer;
+    background: var(--ink); color: var(--white);
+    padding: .85rem 1.4rem; border-radius: 999px; font-weight: 700;
+  }
+  .btn:hover { background: var(--celeste-deep); }
+  .btn[disabled] { opacity: .55; cursor: not-allowed; }
+  .btn.alt { background: var(--white); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+  .btn.alt:hover { background: var(--celeste-pale); }
+  .btn.danger { background: #A52A2A; }
+  .chip {
+    border: 2px solid var(--celeste); background: var(--white); color: var(--ink);
+    padding: .5rem .9rem; border-radius: 999px; cursor: pointer; text-align: left;
+  }
+  .chip:hover { background: var(--celeste); }
+  .small { font-size: .95rem; color: var(--ink-soft); }
+  .note {
+    border-left: 6px solid var(--sol);
+    padding: .4rem 0 .4rem 1rem;
+    color: var(--ink);
+  }
+  .error { color: #8A1C1C; font-weight: 700; }
+  [hidden] { display: none !important; }
+
+  @media (max-width: 880px) {
+    .app { grid-template-columns: 1fr; }
+    .stage { min-height: 74vh; }
+    .stage svg.figure { width: min(100%, 62vh); }
+  }
+</style>
+</head>
+<body>
+
+<main class="app">
+
+  <section class="stage" aria-label="Manuel Belgrano, humano digital">
+    <svg class="figure" id="figure" viewBox="-80 0 560 560" role="img" aria-label="Ilustración de Manuel Belgrano gesticulando">
+      <!-- Sol de Mayo detrás de la cabeza -->
+      <g id="sol" transform="translate(200 170)">
+        <g fill="#F6B40E" stroke="#F6B40E" stroke-linecap="round">
+          <circle r="96" fill="none" stroke-width="3" opacity=".55"/>
+          <g stroke-width="6">
+            <path d="M0 -118v-34M0 118v34M-118 0h-34M118 0h34M-84 -84l-24 -24M84 84l24 24M84 -84l24 -24M-84 84l-24 24"/>
+          </g>
+          <g stroke-width="4" opacity=".85">
+            <path d="M-45 -109l-10 -28M45 109l10 28M-109 45l-28 10M109 -45l28 -10M45 -109l10 -28M-45 109l-10 28M-109 -45l-28 -10M109 45l28 10"/>
+          </g>
+        </g>
+      </g>
+
+      <!-- Torso -->
+      <g id="torso">
+        <path d="M92 560 L104 306 Q108 266 148 254 L252 254 Q292 266 296 306 L308 560 Z" fill="#1F3A5F"/>
+        <!-- solapas -->
+        <path d="M148 254 L200 340 L176 262 Z" fill="#B3262E"/>
+        <path d="M252 254 L200 340 L224 262 Z" fill="#B3262E"/>
+        <!-- cinta celeste y blanca -->
+        <path d="M128 258 L168 258 L300 470 L262 478 Z" fill="#75AADB"/>
+        <path d="M148 258 L158 258 L282 474 L274 476 Z" fill="#FFFFFF"/>
+        <!-- botones -->
+        <g fill="#F6B40E"><circle cx="200" cy="372" r="5"/><circle cx="200" cy="410" r="5"/><circle cx="200" cy="448" r="5"/><circle cx="200" cy="486" r="5"/></g>
+        <!-- charreteras -->
+        <rect x="108" y="262" width="46" height="12" rx="6" fill="#F6B40E"/>
+        <rect x="246" y="262" width="46" height="12" rx="6" fill="#F6B40E"/>
+      </g>
+
+      <!-- Cuello y corbatín -->
+      <rect x="184" y="214" width="32" height="46" fill="#D9A97F"/>
+      <path d="M172 244 L228 244 L216 266 L200 258 L184 266 Z" fill="#FFFFFF"/>
+
+      <!-- Cabeza -->
+      <g id="head">
+        <ellipse cx="152" cy="172" rx="11" ry="15" fill="#E4B994"/>
+        <ellipse cx="248" cy="172" rx="11" ry="15" fill="#E4B994"/>
+        <ellipse cx="200" cy="168" rx="46" ry="56" fill="#EBC5A2"/>
+        <!-- pelo empolvado -->
+        <path d="M152 160 Q148 106 200 102 Q252 106 248 160 Q240 128 200 126 Q160 128 152 160 Z" fill="#ECE9E2"/>
+        <ellipse cx="146" cy="168" rx="13" ry="16" fill="#ECE9E2"/>
+        <ellipse cx="254" cy="168" rx="13" ry="16" fill="#ECE9E2"/>
+        <!-- cejas -->
+        <g id="brows" fill="none" stroke="#8C8A86" stroke-width="4" stroke-linecap="round">
+          <path d="M172 148 Q182 143 192 148"/>
+          <path d="M208 148 Q218 143 228 148"/>
+        </g>
+        <!-- ojos -->
+        <g id="eyes">
+          <g><ellipse cx="182" cy="162" rx="8.5" ry="6" fill="#FFFFFF"/><circle cx="183" cy="162" r="3.6" fill="#2B2B33"/></g>
+          <g><ellipse cx="218" cy="162" rx="8.5" ry="6" fill="#FFFFFF"/><circle cx="217" cy="162" r="3.6" fill="#2B2B33"/></g>
+        </g>
+        <!-- nariz -->
+        <path d="M200 166 Q194 184 199 190 Q204 192 208 189" fill="none" stroke="#C89A78" stroke-width="3" stroke-linecap="round"/>
+        <!-- boca -->
+        <ellipse id="mouth" cx="200" cy="207" rx="11" ry="2" fill="#6B1F24"/>
+        <path id="lip" d="M188 206 Q200 203 212 206" fill="none" stroke="#B5645F" stroke-width="3" stroke-linecap="round"/>
+      </g>
+
+      <!-- Brazo izquierdo del espectador (derecho del personaje) -->
+      <g id="armL">
+        <rect x="120" y="254" width="30" height="96" rx="15" fill="#25477A"/>
+        <g id="foreL">
+          <rect x="121" y="336" width="28" height="84" rx="14" fill="#25477A"/>
+          <rect x="120" y="400" width="30" height="14" rx="4" fill="#FFFFFF"/>
+          <rect x="120" y="394" width="30" height="6" rx="3" fill="#F6B40E"/>
+          <ellipse cx="135" cy="430" rx="13" ry="16" fill="#EBC5A2"/>
+        </g>
+      </g>
+
+      <!-- Brazo derecho del espectador (izquierdo del personaje) -->
+      <g id="armR">
+        <rect x="250" y="254" width="30" height="96" rx="15" fill="#25477A"/>
+        <g id="foreR">
+          <rect x="251" y="336" width="28" height="84" rx="14" fill="#25477A"/>
+          <rect x="250" y="400" width="30" height="14" rx="4" fill="#FFFFFF"/>
+          <rect x="250" y="394" width="30" height="6" rx="3" fill="#F6B40E"/>
+          <ellipse cx="265" cy="430" rx="13" ry="16" fill="#EBC5A2"/>
+        </g>
+      </g>
+    </svg>
+
+    <div class="caption" id="caption" data-empty="true" aria-live="polite">Presioná “Hablar con Belgrano” para empezar.</div>
+  </section>
+
+  <section class="panel">
+    <div>
+      <h1>Manuel Belgrano, para aprender conversando</h1>
+      <p class="lead">Un humano digital educativo que te cuenta la historia de la bandera, la Revolución de Mayo y las campañas por la independencia, y gesticula mientras habla.</p>
+    </div>
+
+    <div>
+      <div class="status" aria-live="polite"><span class="dot" id="dot" data-state="idle"></span><span id="statusText">Listo para conversar</span></div>
+      <div class="row" style="margin-top:.8rem">
+        <button class="btn" id="btnStart" type="button">Hablar con Belgrano</button>
+        <button class="btn danger" id="btnStop" type="button" hidden>Terminar</button>
+        <button class="btn alt" id="btnMute" type="button" hidden aria-pressed="false">Silenciar micrófono</button>
+      </div>
+      <p class="small" id="msg" role="status">Tu navegador te va a pedir permiso para usar el micrófono.</p>
+    </div>
+
+    <div>
+      <h2>Probá preguntar</h2>
+      <div class="row" id="chips">
+        <button class="chip" type="button" data-q="¿Cómo nació la bandera?">¿Cómo nació la bandera?</button>
+        <button class="chip" type="button" data-q="¿Qué pasó en la Revolución de Mayo?">¿Qué pasó en la Revolución de Mayo?</button>
+        <button class="chip" type="button" data-q="¿Por qué te importaba tanto la educación?">¿Por qué te importaba tanto la educación?</button>
+        <button class="chip" type="button" data-q="Contame del Éxodo Jujeño y la batalla de Tucumán.">Contame del Éxodo Jujeño</button>
+      </div>
+    </div>
+
+    <div>
+      <h2>Gestos</h2>
+      <p class="small" style="margin-top:0">Mientras conversa, Belgrano elige gestos según lo que cuenta. Acá podés probarlos.</p>
+      <div class="row" id="gestures">
+        <button class="btn alt" type="button" data-g="greet">Saludo</button>
+        <button class="btn alt" type="button" data-g="explain">Explicar</button>
+        <button class="btn alt" type="button" data-g="point">Señalar</button>
+        <button class="btn alt" type="button" data-g="heart">Mano al pecho</button>
+        <button class="btn alt" type="button" data-g="celebrate">Festejo</button>
+      </div>
+    </div>
+
+    <p class="note small">Es una representación digital educativa basada en fuentes históricas, con una ilustración estilizada. No es el Manuel Belgrano real. Conviene verificar fechas y citas con archivos, museos y publicaciones académicas.</p>
+  </section>
+
+</main>
+
+<script type="module">
+/* ===========================================================
+   CONFIGURACIÓN
+   =========================================================== */
+const AGENT_ID = "agent_6601m4ge78wgfjbtrn1j3zzaqxb5";
+const SDK_URL  = "https://cdn.jsdelivr.net/npm/@elevenlabs/client/+esm";
+
+/* ===========================================================
+   AVATAR: poses y animación
+   Convención de ángulos (en grados):
+   a = separación del brazo respecto del cuerpo (hacia afuera)
+   e = flexión del codo (positivo: el antebrazo va hacia el centro)
+   =========================================================== */
+const $ = (id) => document.getElementById(id);
+const el = {
+  armL: $("armL"), foreL: $("foreL"), armR: $("armR"), foreR: $("foreR"),
+  head: $("head"), torso: $("torso"), mouth: $("mouth"), lip: $("lip"),
+  eyes: $("eyes"), brows: $("brows"), sol: $("sol")
+};
+
+const POSES = {
+  idle:      { la: 6,   le: 14,  ra: 6,   re: 14,  tilt: 0 },
+  explainA:  { la: 30,  le: -35, ra: 30,  re: -35, tilt: 1 },
+  explainB:  { la: 48,  le: -70, ra: 40,  re: -45, tilt: -1.5 },
+  greet:     { la: 8,   le: 14,  ra: 120, re: -60, tilt: 2 },
+  point:     { la: 115, le: -10, ra: 12,  re: 20,  tilt: 3 },
+  heart:     { la: 4,   le: 150, ra: 10,  re: 10,  tilt: -2 },
+  celebrate: { la: 150, le: -20, ra: 150, re: -20, tilt: 0 }
+};
+
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const amp = reduceMotion ? 0.35 : 1;
+
+const cur = { la: 6, le: 14, ra: 6, re: 14, tilt: 0 };
+let target = POSES.idle;
+let gesture = "idle";
+let gestureTimer = null;
+let speaking = false;
+let outVol = 0;        // volumen de salida 0..1
+let mouthOpen = 0;
+let altExplain = false;
+
+function setGesture(name, holdMs = 3200) {
+  gesture = name;
+  target = POSES[name] || POSES.idle;
+  clearTimeout(gestureTimer);
+  if (name !== "idle") {
+    gestureTimer = setTimeout(() => settle(), holdMs);
+  }
+}
+function settle() {
+  if (speaking) {
+    altExplain = !altExplain;
+    gesture = "explain";
+    target = altExplain ? POSES.explainB : POSES.explainA;
+    clearTimeout(gestureTimer);
+    gestureTimer = setTimeout(settle, 2600 + Math.random() * 1600);
+  } else {
+    gesture = "idle";
+    target = POSES.idle;
+  }
+}
+
+// Elige el gesto según lo que Belgrano está diciendo
+function pickGesture(text) {
+  const t = text.toLowerCase();
+  if (/\b(hola|bienvenid|buen[oa]s|un gusto|encantado)/.test(t)) return ["greet", 3600];
+  if (/(victoria|triunf|tucum[aá]n|salta|ganamos|vencimos)/.test(t)) return ["celebrate", 3200];
+  if (/(bandera|celeste|blanca|cielo|rosario|escarapela|izar)/.test(t)) return ["point", 3600];
+  if (/(patria|libertad|pueblo|independencia|compromiso|sacrific|coraz[oó]n|identidad|educaci[oó]n)/.test(t)) return ["heart", 3600];
+  return ["explain", 3000];
+}
+
+const lerp = (a, b, k) => a + (b - a) * k;
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+let t0 = performance.now();
+let nextBlink = t0 + 2500;
+let blinkUntil = 0;
+
+function frame(now) {
+  const t = (now - t0) / 1000;
+  const k = reduceMotion ? 0.06 : 0.1;
+
+  // Interpolación suave hacia la pose objetivo
+  for (const key of ["la", "le", "ra", "re", "tilt"]) {
+    cur[key] = lerp(cur[key], target[key], k);
+  }
+
+  // Oscilaciones: respiración, habla y saludo
+  const talk = speaking ? clamp(0.35 + outVol * 1.6, 0, 1.4) : 0;
+  const breathe = Math.sin(t * 1.6) * 0.6 * amp;
+  let la = cur.la, le = cur.le, ra = cur.ra, re = cur.re;
+
+  if (speaking) {
+    la += Math.sin(t * 2.7) * 6 * talk * amp;
+    ra += Math.sin(t * 2.3 + 1) * 6 * talk * amp;
+    le += Math.sin(t * 4.1 + 0.5) * 9 * talk * amp;
+    re += Math.sin(t * 3.7 + 2.0) * 9 * talk * amp;
+  } else {
+    la += breathe; ra -= breathe;
+  }
+  if (gesture === "greet") {
+    re += Math.sin(t * 9) * 26 * amp;           // el saludo agita el antebrazo
+  }
+  if (gesture === "celebrate") {
+    la += Math.sin(t * 7) * 6 * amp;
+    ra += Math.sin(t * 7 + Math.PI) * 6 * amp;
+  }
+
+  // Aplicar transformaciones a los brazos
+  el.armL.setAttribute("transform", `rotate(${la.toFixed(2)} 135 262)`);
+  el.foreL.setAttribute("transform", `rotate(${(-le).toFixed(2)} 135 342)`);
+  el.armR.setAttribute("transform", `rotate(${(-ra).toFixed(2)} 265 262)`);
+  el.foreR.setAttribute("transform", `rotate(${re.toFixed(2)} 265 342)`);
+
+  // Cabeza: inclinación y leve movimiento al hablar
+  const headTilt = cur.tilt + (speaking ? Math.sin(t * 2.1) * 1.8 * amp : Math.sin(t * 0.9) * 0.6 * amp);
+  const headBob = speaking ? Math.sin(t * 5.2) * 1.2 * outVol * amp : 0;
+  el.head.setAttribute("transform", `translate(0 ${headBob.toFixed(2)}) rotate(${headTilt.toFixed(2)} 200 236)`);
+  el.torso.setAttribute("transform", `translate(0 ${(breathe * 0.8).toFixed(2)})`);
+  el.sol.setAttribute("transform", `translate(200 170) rotate(${(t * 2).toFixed(2)})`);
+
+  // Boca sincronizada con el volumen de la voz
+  const targetOpen = speaking ? clamp(outVol * 2.4 + (Math.sin(t * 14) * 0.5 + 0.5) * 0.12, 0, 1) : 0;
+  mouthOpen = lerp(mouthOpen, targetOpen, 0.35);
+  el.mouth.setAttribute("ry", (2 + mouthOpen * 9).toFixed(2));
+  el.mouth.setAttribute("rx", (11 - mouthOpen * 2.5).toFixed(2));
+  el.lip.setAttribute("d", `M188 ${(206 - mouthOpen * 4).toFixed(1)} Q200 ${(203 - mouthOpen * 5).toFixed(1)} 212 ${(206 - mouthOpen * 4).toFixed(1)}`);
+
+  // Cejas expresivas
+  const browLift = (gesture === "greet" || gesture === "celebrate") ? -3 : (speaking ? Math.sin(t * 3) * 1 : 0);
+  el.brows.setAttribute("transform", `translate(0 ${browLift.toFixed(2)})`);
+
+  // Parpadeo
+  if (now > nextBlink) { blinkUntil = now + 130; nextBlink = now + 2600 + Math.random() * 2600; }
+  const blink = now < blinkUntil ? 0.1 : 1;
+  el.eyes.setAttribute("transform", `translate(0 162) scale(1 ${blink}) translate(0 -162)`);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ===========================================================
+   INTERFAZ
+   =========================================================== */
+const ui = {
+  dot: $("dot"), statusText: $("statusText"), msg: $("msg"), caption: $("caption"),
+  start: $("btnStart"), stop: $("btnStop"), mute: $("btnMute")
+};
+
+function setStatus(state, text) {
+  ui.dot.dataset.state = state;
+  ui.statusText.textContent = text;
+}
+function setCaption(text) {
+  ui.caption.textContent = text;
+  ui.caption.dataset.empty = text ? "false" : "true";
+}
+
+document.querySelectorAll("#gestures [data-g]").forEach((b) => {
+  b.addEventListener("click", () => setGesture(b.dataset.g === "explain" ? "explainA" : b.dataset.g, 3600));
+});
+
+/* ===========================================================
+   CONEXIÓN CON EL AGENTE DE ELEVENLABS
+   =========================================================== */
+let Conversation = null;
+let conversation = null;
+let pendingQuestion = null;
+let volTimer = null;
+
+async function loadSdk() {
+  if (Conversation) return true;
+  try {
+    const mod = await import(SDK_URL);
+    Conversation = mod.Conversation;
+    return !!Conversation;
+  } catch (err) {
+    console.error("No se pudo cargar el SDK de ElevenLabs", err);
+    return false;
+  }
+}
+
+async function startConversation() {
+  ui.start.disabled = true;
+  setStatus("connecting", "Conectando…");
+  ui.msg.textContent = "Permití el micrófono cuando el navegador lo pida.";
+  ui.msg.classList.remove("error");
+
+  if (!(await loadSdk())) {
+    setStatus("idle", "No se pudo conectar");
+    ui.msg.textContent = "No se pudo cargar el componente de voz. Revisá tu conexión a internet e intentá de nuevo.";
+    ui.msg.classList.add("error");
+    ui.start.disabled = false;
+    return;
+  }
+
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    setStatus("idle", "Micrófono bloqueado");
+    ui.msg.textContent = "Necesitamos acceso al micrófono para conversar. Habilitalo en el navegador y volvé a intentar.";
+    ui.msg.classList.add("error");
+    ui.start.disabled = false;
+    return;
+  }
+
+  try {
+    conversation = await Conversation.startSession({
+      agentId: AGENT_ID,
+      connectionType: "webrtc",
+      onConnect: () => {
+        ui.start.hidden = true;
+        ui.stop.hidden = false;
+        ui.mute.hidden = false;
+        setStatus("listening", "Belgrano te escucha");
+        ui.msg.textContent = "Hablá con naturalidad. Podés interrumpirlo cuando quieras.";
+        startVolumePolling();
+        if (pendingQuestion) {
+          const q = pendingQuestion; pendingQuestion = null;
+          setTimeout(() => { try { conversation.sendUserMessage(q); } catch (e) {} }, 400);
+        }
+      },
+      onDisconnect: () => endUi(),
+      onError: (e) => {
+        console.error(e);
+        ui.msg.textContent = "Hubo un problema con la conexión. Probá de nuevo.";
+        ui.msg.classList.add("error");
+      },
+      onModeChange: (m) => {
+        const mode = m && m.mode;
+        speaking = mode === "speaking";
+        if (speaking) {
+          setStatus("speaking", "Belgrano habla");
+          if (gesture === "idle") settle();
+        } else {
+          setStatus("listening", "Belgrano te escucha");
+          outVol = 0;
+          clearTimeout(gestureTimer);
+          gestureTimer = setTimeout(() => setGesture("idle"), 900);
+        }
+      },
+      onMessage: (m) => {
+        if (!m || !m.message) return;
+        if (m.source === "ai" || m.role === "agent") {
+          setCaption(m.message);
+          const [g, hold] = pickGesture(m.message);
+          setGesture(g === "explain" ? "explainA" : g, hold);
+        } else {
+          setCaption("Vos: " + m.message);
+        }
+      }
+    });
+  } catch (err) {
+    console.error(err);
+    setStatus("idle", "No se pudo conectar");
+    ui.msg.textContent = "No se pudo iniciar la conversación. Verificá que el agente esté público en ElevenLabs.";
+    ui.msg.classList.add("error");
+    ui.start.disabled = false;
+  }
+}
+
+function startVolumePolling() {
+  clearInterval(volTimer);
+  volTimer = setInterval(async () => {
+    if (!conversation) return;
+    try {
+      const v = await conversation.getOutputVolume();
+      outVol = clamp(typeof v === "number" ? v : 0, 0, 1);
+    } catch (e) { /* ignorar */ }
+  }, 50);
+}
+
+function endUi() {
+  clearInterval(volTimer);
+  conversation = null;
+  speaking = false; outVol = 0;
+  setGesture("idle");
+  ui.start.hidden = false; ui.start.disabled = false;
+  ui.stop.hidden = true; ui.mute.hidden = true;
+  ui.mute.setAttribute("aria-pressed", "false");
+  ui.mute.textContent = "Silenciar micrófono";
+  setStatus("idle", "Listo para conversar");
+  ui.msg.textContent = "Conversación terminada. Podés empezar otra cuando quieras.";
+}
+
+ui.start.addEventListener("click", startConversation);
+ui.stop.addEventListener("click", async () => {
+  try { await conversation.endSession(); } catch (e) {}
+  endUi();
+});
+ui.mute.addEventListener("click", () => {
+  if (!conversation) return;
+  const muted = ui.mute.getAttribute("aria-pressed") !== "true";
+  try { conversation.setMicMuted(muted); } catch (e) {}
+  ui.mute.setAttribute("aria-pressed", String(muted));
+  ui.mute.textContent = muted ? "Activar micrófono" : "Silenciar micrófono";
+});
+
+document.querySelectorAll("#chips [data-q]").forEach((b) => {
+  b.addEventListener("click", () => {
+    const q = b.dataset.q;
+    if (conversation) {
+      try { conversation.sendUserMessage(q); setCaption("Vos: " + q); } catch (e) {}
+    } else {
+      pendingQuestion = q;
+      startConversation();
+    }
+  });
+});
+
+// Saludo gestual al cargar
+setTimeout(() => setGesture("greet", 3200), 700);
+</script>
+</body>
+</html>
